@@ -4,8 +4,10 @@
 
 script/source = "extends Node
 
-const RSIZE_H = 7
-const RSIZE_W = 7
+var rsize_w = 7
+var rsize_h = 7
+
+
 
 func _ready():
 	
@@ -18,24 +20,52 @@ script/source = "extends Control
 
 onready var game = get_node(\"..\")
 
+var rod_btn = []
+
+var current_rod
+
 func _ready():
 	reset_buttons()
 	pass
 
+func rod_update():
+	pass
+
 func reset_buttons():
-	var size_x = get_size().x / game.RSIZE_W
-	var size_y = get_size().y / game.RSIZE_H
+	var size_x = get_size().x / game.rsize_w
+	var size_y = get_size().y / game.rsize_h
+	var btn_size = min(size_x, size_y)
 	
 	var btn = get_node(\"RodBtn\")
 	
-	btn.set_size(Vector2(size_x, size_y))
+	for i in rod_btn:
+		rod_btn[i].free()
+	
+	var offset = Vector2(get_size().x - game.rsize_w*btn_size, get_size().y - game.rsize_h*btn_size)*0.5
+	for h in range(game.rsize_h):
+		for w in range(game.rsize_w):
+			var obj = btn.duplicate()
+			obj.set_size(Vector2(btn_size, btn_size))
+			obj.set_pos(Vector2(w*btn_size, h*btn_size) + offset)
+			add_child(obj)
+			obj.connect(\"pressed\", get_node(\".\"), \"_rod_btn_click\", [w + h*game.rsize_h])
+			obj.show()
+			rod_btn.push_back(obj)
+	
+	current_rod = 0
+	rod_btn[current_rod].set_disabled(true)
+
+func _rod_btn_click(id):
+	rod_btn[current_rod].set_disabled(false)
+	current_rod = id
+	rod_btn[current_rod].set_disabled(true)
 "
 
 [node name="Game" type="Node"]
 
 script/script = SubResource( 1 )
 
-[node name="ReactorPanel" type="Control" parent="."]
+[node name="RodPanel" type="Control" parent="."]
 
 anchor/right = 1
 anchor/bottom = 1
@@ -49,9 +79,24 @@ margin/right = 0.0
 margin/bottom = 0.0
 script/script = SubResource( 2 )
 
-[node name="RodBtn" type="Button" parent="ReactorPanel"]
+[node name="Panel" type="Panel" parent="RodPanel"]
 
-rect/min_size = Vector2( 80, 80 )
+anchor/right = 1
+anchor/bottom = 1
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 0.0
+margin/top = 0.0
+margin/right = 0.0
+margin/bottom = 0.0
+
+[node name="RodBtn" type="Button" parent="RodPanel"]
+
+editor/display_folded = true
+visibility/visible = false
+rect/min_size = Vector2( 40, 40 )
 focus/ignore_mouse = false
 focus/stop_mouse = true
 size_flags/horizontal = 2
@@ -65,7 +110,7 @@ enabled_focus_mode = 2
 shortcut = null
 flat = false
 
-[node name="Label" type="Label" parent="ReactorPanel/RodBtn"]
+[node name="Label" type="Label" parent="RodPanel/RodBtn"]
 
 anchor/right = 1
 anchor/bottom = 1
