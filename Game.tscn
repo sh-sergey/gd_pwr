@@ -1,0 +1,86 @@
+[gd_scene load_steps=3 format=1]
+
+[sub_resource type="GDScript" id=1]
+
+script/source = "extends Node
+
+const RSIZE_H = 7
+const RSIZE_W = 7
+
+func _ready():
+	
+	pass
+"
+
+[sub_resource type="GDScript" id=2]
+
+script/source = "extends Control
+
+onready var game = get_node(\"..\")
+
+func _ready():
+	reset_buttons()
+	pass
+
+func reset_buttons():
+	var size_x = get_size().x / game.RSIZE_W
+	var size_y = get_size().y / game.RSIZE_H
+	
+	var btn = get_node(\"RodBtn\")
+	
+	btn.set_size(Vector2(size_x, size_y))
+"
+
+[node name="Game" type="Node"]
+
+script/script = SubResource( 1 )
+
+[node name="ReactorPanel" type="Control" parent="."]
+
+anchor/right = 1
+anchor/bottom = 1
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 0.0
+margin/top = 0.0
+margin/right = 0.0
+margin/bottom = 0.0
+script/script = SubResource( 2 )
+
+[node name="RodBtn" type="Button" parent="ReactorPanel"]
+
+rect/min_size = Vector2( 80, 80 )
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 0.0
+margin/top = 0.0
+margin/right = 12.0
+margin/bottom = 20.0
+toggle_mode = false
+enabled_focus_mode = 2
+shortcut = null
+flat = false
+
+[node name="Label" type="Label" parent="ReactorPanel/RodBtn"]
+
+anchor/right = 1
+anchor/bottom = 1
+focus/ignore_mouse = true
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 0
+margin/left = 0.0
+margin/top = 0.0
+margin/right = 0.0
+margin/bottom = 0.0
+align = 1
+valign = 1
+percent_visible = 1.0
+lines_skipped = 0
+max_lines_visible = -1
+
+
