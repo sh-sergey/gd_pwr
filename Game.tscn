@@ -1,17 +1,29 @@
-[gd_scene load_steps=3 format=1]
+[gd_scene load_steps=5 format=1]
 
 [sub_resource type="GDScript" id=1]
 
 script/source = "extends Node
 
+onready var rod_panel = get_node(\"RodPanel\")
+
 var rsize_w = 7
 var rsize_h = 7
 
-
+var rod_pos = []
+var rod_power = []
 
 func _ready():
+	reactor_start_state()
+	rod_panel.rod_update()
+
+func reactor_start_state():
+	for i in range(rsize_w*rsize_h):
+		rod_pos.push_back(0)
+		rod_power.push_back(0)
 	
-	pass
+
+func rod_move(rod, d):
+	rod_pos[rod] = clamp(rod_pos[rod] + d, 0, 100)
 "
 
 [sub_resource type="GDScript" id=2]
@@ -19,27 +31,42 @@ func _ready():
 script/source = "extends Control
 
 onready var game = get_node(\"..\")
+onready var rod_control = get_node(\"../RodControl\")
+
+var rod_btn_mode = false
+var rod_count
 
 var rod_btn = []
 
 var current_rod
+
+const MIN_BTN_SIZE = 40
+const MAX_BTN_SIZE = 80
 
 func _ready():
 	reset_buttons()
 	pass
 
 func rod_update():
-	pass
+	for i in range(rod_count):
+		rod_btn[i].set_text(str(game.rod_pos[i]))
 
 func reset_buttons():
+	rod_count = game.rsize_w*game.rsize_h
 	var size_x = get_size().x / game.rsize_w
 	var size_y = get_size().y / game.rsize_h
-	var btn_size = min(size_x, size_y)
+	var btn_size = clamp(min(size_x, size_y), MIN_BTN_SIZE, MAX_BTN_SIZE)
 	
-	var btn = get_node(\"RodBtn\")
+	var btn
+	if (!rod_btn_mode):
+		btn = get_node(\"RodBtn\")
+	else:
+		btn = get_node(\"RodBtn1\")
 	
 	for i in rod_btn:
-		rod_btn[i].free()
+		i.free()
+	
+	rod_btn.clear()
 	
 	var offset = Vector2(get_size().x - game.rsize_w*btn_size, get_size().y - game.rsize_h*btn_size)*0.5
 	for h in range(game.rsize_h):
@@ -53,12 +80,88 @@ func reset_buttons():
 			rod_btn.push_back(obj)
 	
 	current_rod = 0
-	rod_btn[current_rod].set_disabled(true)
+	rod_btn[current_rod].set_pressed(true)
 
 func _rod_btn_click(id):
-	rod_btn[current_rod].set_disabled(false)
+	rod_btn[current_rod].set_pressed(false)
 	current_rod = id
-	rod_btn[current_rod].set_disabled(true)
+	rod_btn[current_rod].set_pressed(true)
+	rod_control.update_info()
+"
+
+[sub_resource type="GDScript" id=4]
+
+script/source = "extends Panel
+
+onready var game = get_node(\"..\")
+onready var rod_panel = get_node(\"../RodPanel\")
+
+onready var rod_id = get_node(\"RodId\")
+onready var rod_pos = get_node(\"RodPos\")
+onready var shift_btn = get_node(\"Shift\")
+
+var shift = false
+var rod_mul = 1
+
+func _ready():
+	
+	pass
+
+
+
+func update_info():
+	rod_id.set_text(\"Rod num: %d\" % rod_panel.current_rod)
+	rod_pos.set_text(\"Rod pos: %d\" % game.rod_pos[rod_panel.current_rod])
+
+
+func _on_RodUp_pressed():
+	game.rod_move(rod_panel.current_rod, 1 * rod_mul)
+	update_info()
+	rod_panel.rod_update()
+
+
+func _on_RodDown_pressed():
+	game.rod_move(rod_panel.current_rod, -1 * rod_mul)
+	update_info()
+	rod_panel.rod_update()
+
+
+func _on_Shift_pressed():
+	if (shift):
+		shift = false
+		rod_mul = 1
+		shift_btn.set_pressed(false)
+	else:
+		shift = true
+		rod_mul = 10
+		shift_btn.set_pressed(true)
+"
+
+[sub_resource type="GDScript" id=3]
+
+script/source = "extends Button
+
+onready var rod_panel = get_node(\"../RodPanel\")
+onready var options = get_node(\"Options\")
+
+func _ready():
+	
+	pass
+
+
+func _on_Debug_pressed():
+	if (options.is_visible()):
+		options.hide()
+	else:
+		options.show()
+
+func _on_RBM_pressed():
+	rod_panel.rod_btn_mode = !rod_panel.rod_btn_mode
+	rod_panel.reset_buttons()
+
+
+func _on_UPD_pressed():
+	rod_panel.rod_update()
 "
 
 [node name="Game" type="Node"]
@@ -67,6 +170,7 @@ script/script = SubResource( 1 )
 
 [node name="RodPanel" type="Control" parent="."]
 
+editor/display_folded = true
 anchor/right = 1
 anchor/bottom = 1
 focus/ignore_mouse = false
@@ -76,7 +180,7 @@ size_flags/vertical = 2
 margin/left = 0.0
 margin/top = 0.0
 margin/right = 0.0
-margin/bottom = 0.0
+margin/bottom = 100.0
 script/script = SubResource( 2 )
 
 [node name="Panel" type="Panel" parent="RodPanel"]
@@ -105,7 +209,7 @@ margin/left = 0.0
 margin/top = 0.0
 margin/right = 12.0
 margin/bottom = 20.0
-toggle_mode = false
+toggle_mode = true
 enabled_focus_mode = 2
 shortcut = null
 flat = false
@@ -127,5 +231,236 @@ valign = 1
 percent_visible = 1.0
 lines_skipped = 0
 max_lines_visible = -1
+
+[node name="RodBtn1" type="Button" parent="RodPanel"]
+
+editor/display_folded = true
+visibility/visible = false
+rect/min_size = Vector2( 40, 40 )
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 0.0
+margin/top = 0.0
+margin/right = 12.0
+margin/bottom = 20.0
+toggle_mode = true
+enabled_focus_mode = 2
+shortcut = null
+flat = false
+
+[node name="Label" type="Label" parent="RodPanel/RodBtn1"]
+
+anchor/right = 1
+anchor/bottom = 2
+focus/ignore_mouse = true
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 0
+margin/left = 0.0
+margin/top = 0.0
+margin/right = 0.0
+margin/bottom = 0.4
+align = 1
+valign = 1
+percent_visible = 1.0
+lines_skipped = 0
+max_lines_visible = -1
+
+[node name="Panel" type="Panel" parent="RodPanel/RodBtn1"]
+
+anchor/right = 1
+anchor/bottom = 2
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 0.0
+margin/top = 0.0
+margin/right = 0.0
+margin/bottom = 0.4
+
+[node name="RodControl" type="Panel" parent="."]
+
+anchor/top = 1
+anchor/bottom = 1
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 0.0
+margin/top = 100.0
+margin/right = 200.0
+margin/bottom = 0.0
+script/script = SubResource( 4 )
+
+[node name="RodUp" type="Button" parent="RodControl"]
+
+anchor/left = 1
+anchor/right = 1
+anchor/bottom = 2
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 60.0
+margin/top = 0.0
+margin/right = 0.0
+margin/bottom = 0.5
+toggle_mode = false
+enabled_focus_mode = 2
+shortcut = null
+text = "^"
+flat = false
+
+[node name="RodDown" type="Button" parent="RodControl"]
+
+anchor/left = 1
+anchor/top = 2
+anchor/right = 1
+anchor/bottom = 1
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 60.0
+margin/top = 0.5
+margin/right = 0.0
+margin/bottom = 0.0
+toggle_mode = false
+enabled_focus_mode = 2
+shortcut = null
+text = "v"
+flat = false
+
+[node name="RodId" type="Label" parent="RodControl"]
+
+focus/ignore_mouse = true
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 0
+margin/left = 0.0
+margin/top = 0.0
+margin/right = 40.0
+margin/bottom = 14.0
+percent_visible = 1.0
+lines_skipped = 0
+max_lines_visible = -1
+
+[node name="RodPos" type="Label" parent="RodControl"]
+
+focus/ignore_mouse = true
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 0
+margin/left = 0.0
+margin/top = 20.0
+margin/right = 40.0
+margin/bottom = 34.0
+percent_visible = 1.0
+lines_skipped = 0
+max_lines_visible = -1
+
+[node name="Shift" type="Button" parent="RodControl"]
+
+anchor/top = 1
+anchor/bottom = 1
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 0.0
+margin/top = 40.0
+margin/right = 40.0
+margin/bottom = 0.0
+toggle_mode = true
+enabled_focus_mode = 2
+shortcut = null
+text = "SH"
+flat = false
+
+[node name="Debug" type="Button" parent="."]
+
+anchor/left = 3
+anchor/right = 3
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 20.0
+margin/top = 0.0
+margin/right = -20.0
+margin/bottom = 40.0
+toggle_mode = false
+enabled_focus_mode = 2
+shortcut = null
+text = "Dbg"
+flat = false
+script/script = SubResource( 3 )
+
+[node name="Options" type="ButtonGroup" parent="Debug"]
+
+editor/display_folded = true
+visibility/visible = false
+anchor/left = 3
+anchor/top = 1
+anchor/right = 3
+anchor/bottom = 1
+focus/ignore_mouse = false
+focus/stop_mouse = false
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 20.0
+margin/top = 0.0
+margin/right = -20.0
+margin/bottom = -80.0
+alignment = 0
+
+[node name="RBM" type="Button" parent="Debug/Options"]
+
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 0.0
+margin/top = 0.0
+margin/right = 41.0
+margin/bottom = 20.0
+toggle_mode = true
+click_on_press = true
+enabled_focus_mode = 2
+shortcut = null
+text = "RBM"
+flat = false
+
+[node name="UPD" type="Button" parent="Debug/Options"]
+
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 0.0
+margin/top = 20.0
+margin/right = 41.0
+margin/bottom = 40.0
+toggle_mode = true
+click_on_press = true
+enabled_focus_mode = 2
+shortcut = null
+text = "UPD"
+flat = false
+
+[connection signal="pressed" from="RodControl/RodUp" to="RodControl" method="_on_RodUp_pressed"]
+
+[connection signal="pressed" from="RodControl/RodDown" to="RodControl" method="_on_RodDown_pressed"]
+
+[connection signal="pressed" from="RodControl/Shift" to="RodControl" method="_on_Shift_pressed"]
+
+[connection signal="pressed" from="Debug" to="Debug" method="_on_Debug_pressed"]
+
+[connection signal="pressed" from="Debug/Options/RBM" to="Debug" method="_on_RBM_pressed"]
+
+[connection signal="pressed" from="Debug/Options/UPD" to="Debug" method="_on_UPD_pressed"]
 
 
