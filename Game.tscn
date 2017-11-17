@@ -1,4 +1,4 @@
-[gd_scene load_steps=5 format=1]
+[gd_scene load_steps=6 format=1]
 
 [sub_resource type="GDScript" id=1]
 
@@ -6,27 +6,100 @@ script/source = "extends Node
 
 onready var rod_panel = get_node(\"RodPanel\")
 
-var rsize_w = 7
-var rsize_h = 7
+var rsize_w = 9
+var rsize_h = 9
 
-var rod_pos = []
-var rod_power = []
+var rods = []
+var power = []
+
+class rod:
+	var pos = 0
+	var x = 0
+	var y = 0
 
 func _ready():
 	reactor_start_state()
-	rod_panel.rod_update()
+	rod_panel.reset_buttons()
+#	rod_panel.rod_update()
 
 func reactor_start_state():
 	for i in range(rsize_w*rsize_h):
-		rod_pos.push_back(0)
-		rod_power.push_back(0)
+		power.push_back(0)
+	for h in range(rsize_h):
+		for w in range(rsize_w):
+			if (plan_default[w + h*rsize_h] == 2):
+				var obj = rod.new()
+				obj.x = w
+				obj.y = h
+				rods.push_back(obj)
 	
 
 func rod_move(rod, d):
-	rod_pos[rod] = clamp(rod_pos[rod] + d, 0, 100)
+	rods[rod].pos = clamp(rods[rod].pos + d, 0, 100)
+
+var plan_default = [0,0,1,1,1,1,1,0,0,
+					0,1,1,2,1,2,1,1,0,
+					1,2,1,1,1,1,1,2,1,
+					1,1,1,2,1,2,1,1,1,
+					1,2,1,1,1,1,1,2,1,
+					1,1,1,2,1,2,1,1,1,
+					1,2,1,1,1,1,1,2,1,
+					0,1,1,2,1,2,1,1,0,
+					0,0,1,1,1,1,1,0,0]
 "
 
 [sub_resource type="GDScript" id=2]
+
+script/source = "extends Control
+
+onready var game = get_node(\"..\")
+
+const MIN_IND_SIZE = 20
+const MAX_IND_SIZE = 80
+
+onready var img = preload(\"assets/c0.tex\")
+
+var inds = []
+var ind_labels = []
+
+func _ready():
+	reset_ind()
+	pass
+
+func reset_ind():
+	var size_x = get_size().x / game.rsize_w
+	var size_y = get_size().y / game.rsize_h
+	var ind_size = clamp(min(size_x, size_y), MIN_IND_SIZE, MAX_IND_SIZE)
+	
+	var ind = get_node(\"Indicator\")
+	
+	ind_labels.clear()
+	for i in inds:
+		i.free()
+	inds.clear()
+	
+	var offset = Vector2(get_size().x - game.rsize_w*ind_size, get_size().y - game.rsize_h*ind_size)*0.5
+	for h in range(game.rsize_h):
+		for w in range(game.rsize_w):
+			var obj = ind.duplicate()
+			obj.set_size(Vector2(ind_size, ind_size))
+			obj.set_pos(Vector2(w*ind_size, h*ind_size) + offset)
+			add_child(obj)
+			var label = obj.get_node(\"Label\")
+			if (game.plan_default[w + h*game.rsize_h] == 1):
+				obj.set_texture(img)
+				obj.set_modulate(Color(0.4, 0.4, 0.4))
+				label.set_text(\"%d-%d\" % [w,h])
+			elif (game.plan_default[w + h*game.rsize_h] == 2):
+				obj.set_texture(img)
+				obj.set_modulate(Color(0.2, 0.4, 0.2))
+				label.set_text(\"%d-%d\" % [w,h])
+			obj.show()
+			inds.push_back(obj)
+			ind_labels.push_back(label)
+"
+
+[sub_resource type="GDScript" id=3]
 
 script/source = "extends Control
 
@@ -40,44 +113,66 @@ var rod_btn = []
 
 var current_rod
 
-const MIN_BTN_SIZE = 40
-const MAX_BTN_SIZE = 80
+var min_btn_size = 40
+var max_btn_size = 80
+var max_btn_dis = 320
 
 func _ready():
-	reset_buttons()
+#	reset_buttons()
 	pass
 
 func rod_update():
 	for i in range(rod_count):
-		rod_btn[i].set_text(str(game.rod_pos[i]))
+		rod_btn[i].set_text(str(game.rods[i].pos))
 
 func reset_buttons():
-	rod_count = game.rsize_w*game.rsize_h
-	var size_x = get_size().x / game.rsize_w
-	var size_y = get_size().y / game.rsize_h
-	var btn_size = clamp(min(size_x, size_y), MIN_BTN_SIZE, MAX_BTN_SIZE)
+	var rod_cnt = []
+	for i in range(game.rsize_h):
+		rod_cnt.append(0)
+	for i in game.rods:
+		rod_cnt[i.y] += 1
+#	for i in range(game.rsize_h):
+#		if (rod_cnt[i] == 0):
+#			rod_cnt.remove(i)
 	
-	var btn
-	if (!rod_btn_mode):
-		btn = get_node(\"RodBtn\")
-	else:
-		btn = get_node(\"RodBtn1\")
+	rod_count = 0
+	for i in rod_cnt:
+		rod_count += i
+	
+	var max_x = 0
+	var max_y = rod_cnt.size()
+	for i in rod_cnt:
+		if (i > max_x):
+			max_x = i
+	
+	var size_x = get_size().x / max_x
+	var size_y = get_size().y / max_y
+	var btn_size = clamp(min(size_x, size_y), min_btn_size, max_btn_size)
+	
+	var btn = get_node(\"RodBtn\")
 	
 	for i in rod_btn:
 		i.free()
-	
 	rod_btn.clear()
 	
-	var offset = Vector2(get_size().x - game.rsize_w*btn_size, get_size().y - game.rsize_h*btn_size)*0.5
-	for h in range(game.rsize_h):
-		for w in range(game.rsize_w):
-			var obj = btn.duplicate()
-			obj.set_size(Vector2(btn_size, btn_size))
-			obj.set_pos(Vector2(w*btn_size, h*btn_size) + offset)
-			add_child(obj)
-			obj.connect(\"pressed\", get_node(\".\"), \"_rod_btn_click\", [w + h*game.rsize_h])
-			obj.show()
-			rod_btn.push_back(obj)
+	var offset_y = (get_size().y - max_y*btn_size)*0.5
+	var offset_x = []
+	var count_x = []
+	for y in range(rod_cnt.size()):
+		var btn_dis = clamp((get_size().x / (rod_cnt[game.rods[y].y]+1) - btn_size), 0, max_btn_dis)
+		offset_x.append((get_size().x - rod_cnt[y]*(btn_size+btn_dis))*0.5)
+		count_x.append(0)
+	for i in range(game.rods.size()):
+		var offset = Vector2(offset_x[game.rods[i].y], offset_y)
+		var btn_dis = clamp((get_size().x / rod_cnt[game.rods[i].y] - btn_size), 0, max_btn_dis)
+		var obj = btn.duplicate()
+		obj.set_size(Vector2(btn_size, btn_size))
+		obj.set_pos(Vector2(count_x[game.rods[i].y], game.rods[i].y*(btn_size)) + offset)
+		count_x[game.rods[i].y] += btn_size + btn_dis
+		add_child(obj)
+		obj.connect(\"pressed\", get_node(\".\"), \"_rod_btn_click\", [i])
+		obj.show()
+		rod_btn.push_back(obj)
 	
 	current_rod = 0
 	rod_btn[current_rod].set_pressed(true)
@@ -111,7 +206,7 @@ func _ready():
 
 func update_info():
 	rod_id.set_text(\"Rod num: %d\" % rod_panel.current_rod)
-	rod_pos.set_text(\"Rod pos: %d\" % game.rod_pos[rod_panel.current_rod])
+	rod_pos.set_text(\"Rod pos: %d\" % game.rods[rod_panel.current_rod].pos)
 
 
 func _on_RodUp_pressed():
@@ -137,7 +232,7 @@ func _on_Shift_pressed():
 		shift_btn.set_pressed(true)
 "
 
-[sub_resource type="GDScript" id=3]
+[sub_resource type="GDScript" id=5]
 
 script/source = "extends Button
 
@@ -155,10 +250,6 @@ func _on_Debug_pressed():
 	else:
 		options.show()
 
-func _on_RBM_pressed():
-	rod_panel.rod_btn_mode = !rod_panel.rod_btn_mode
-	rod_panel.reset_buttons()
-
 
 func _on_UPD_pressed():
 	rod_panel.rod_update()
@@ -168,9 +259,22 @@ func _on_UPD_pressed():
 
 script/script = SubResource( 1 )
 
-[node name="RodPanel" type="Control" parent="."]
+[node name="ReactorPanel" type="Control" parent="."]
 
-editor/display_folded = true
+anchor/right = 3
+anchor/bottom = 1
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 0.0
+margin/top = 60.0
+margin/right = 0.0
+margin/bottom = 100.0
+script/script = SubResource( 2 )
+
+[node name="Panel" type="Panel" parent="ReactorPanel"]
+
 anchor/right = 1
 anchor/bottom = 1
 focus/ignore_mouse = false
@@ -180,8 +284,55 @@ size_flags/vertical = 2
 margin/left = 0.0
 margin/top = 0.0
 margin/right = 0.0
+margin/bottom = 0.0
+
+[node name="Indicator" type="TextureFrame" parent="ReactorPanel"]
+
+editor/display_folded = true
+focus/ignore_mouse = true
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 0.0
+margin/top = 0.0
+margin/right = 40.0
+margin/bottom = 40.0
+expand = true
+stretch_mode = 0
+
+[node name="Label" type="Label" parent="ReactorPanel/Indicator"]
+
+anchor/right = 1
+anchor/bottom = 1
+focus/ignore_mouse = true
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 0
+margin/left = 0.0
+margin/top = 0.0
+margin/right = 0.0
+margin/bottom = 0.0
+align = 1
+valign = 1
+clip_text = true
+percent_visible = 1.0
+lines_skipped = 0
+max_lines_visible = -1
+
+[node name="RodPanel" type="Control" parent="."]
+
+anchor/left = 3
+anchor/right = 1
+anchor/bottom = 1
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 0.0
+margin/top = 60.0
+margin/right = 0.0
 margin/bottom = 100.0
-script/script = SubResource( 2 )
+script/script = SubResource( 3 )
 
 [node name="Panel" type="Panel" parent="RodPanel"]
 
@@ -232,58 +383,11 @@ percent_visible = 1.0
 lines_skipped = 0
 max_lines_visible = -1
 
-[node name="RodBtn1" type="Button" parent="RodPanel"]
-
-editor/display_folded = true
-visibility/visible = false
-rect/min_size = Vector2( 40, 40 )
-focus/ignore_mouse = false
-focus/stop_mouse = true
-size_flags/horizontal = 2
-size_flags/vertical = 2
-margin/left = 0.0
-margin/top = 0.0
-margin/right = 12.0
-margin/bottom = 20.0
-toggle_mode = true
-enabled_focus_mode = 2
-shortcut = null
-flat = false
-
-[node name="Label" type="Label" parent="RodPanel/RodBtn1"]
-
-anchor/right = 1
-anchor/bottom = 2
-focus/ignore_mouse = true
-focus/stop_mouse = true
-size_flags/horizontal = 2
-size_flags/vertical = 0
-margin/left = 0.0
-margin/top = 0.0
-margin/right = 0.0
-margin/bottom = 0.4
-align = 1
-valign = 1
-percent_visible = 1.0
-lines_skipped = 0
-max_lines_visible = -1
-
-[node name="Panel" type="Panel" parent="RodPanel/RodBtn1"]
-
-anchor/right = 1
-anchor/bottom = 2
-focus/ignore_mouse = false
-focus/stop_mouse = true
-size_flags/horizontal = 2
-size_flags/vertical = 2
-margin/left = 0.0
-margin/top = 0.0
-margin/right = 0.0
-margin/bottom = 0.4
-
 [node name="RodControl" type="Panel" parent="."]
 
+anchor/left = 3
 anchor/top = 1
+anchor/right = 1
 anchor/bottom = 1
 focus/ignore_mouse = false
 focus/stop_mouse = true
@@ -291,7 +395,7 @@ size_flags/horizontal = 2
 size_flags/vertical = 2
 margin/left = 0.0
 margin/top = 100.0
-margin/right = 200.0
+margin/right = 0.0
 margin/bottom = 0.0
 script/script = SubResource( 4 )
 
@@ -397,7 +501,7 @@ enabled_focus_mode = 2
 shortcut = null
 text = "Dbg"
 flat = false
-script/script = SubResource( 3 )
+script/script = SubResource( 5 )
 
 [node name="Options" type="ButtonGroup" parent="Debug"]
 
@@ -416,23 +520,6 @@ margin/top = 0.0
 margin/right = -20.0
 margin/bottom = -80.0
 alignment = 0
-
-[node name="RBM" type="Button" parent="Debug/Options"]
-
-focus/ignore_mouse = false
-focus/stop_mouse = true
-size_flags/horizontal = 2
-size_flags/vertical = 2
-margin/left = 0.0
-margin/top = 0.0
-margin/right = 41.0
-margin/bottom = 20.0
-toggle_mode = true
-click_on_press = true
-enabled_focus_mode = 2
-shortcut = null
-text = "RBM"
-flat = false
 
 [node name="UPD" type="Button" parent="Debug/Options"]
 
@@ -458,8 +545,6 @@ flat = false
 [connection signal="pressed" from="RodControl/Shift" to="RodControl" method="_on_Shift_pressed"]
 
 [connection signal="pressed" from="Debug" to="Debug" method="_on_Debug_pressed"]
-
-[connection signal="pressed" from="Debug/Options/RBM" to="Debug" method="_on_RBM_pressed"]
 
 [connection signal="pressed" from="Debug/Options/UPD" to="Debug" method="_on_UPD_pressed"]
 
