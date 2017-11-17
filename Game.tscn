@@ -20,7 +20,7 @@ class rod:
 func _ready():
 	reactor_start_state()
 	rod_panel.reset_buttons()
-#	rod_panel.rod_update()
+	rod_panel.rod_update()
 
 func reactor_start_state():
 	for i in range(rsize_w*rsize_h):
@@ -110,6 +110,7 @@ var rod_btn_mode = false
 var rod_count
 
 var rod_btn = []
+var rod_btn_label = []
 
 var current_rod
 
@@ -118,36 +119,45 @@ var max_btn_size = 80
 var max_btn_dis = 320
 
 func _ready():
-#	reset_buttons()
 	pass
 
 func rod_update():
 	for i in range(rod_count):
-		rod_btn[i].set_text(str(game.rods[i].pos))
+		rod_btn_label[i].set_text(str(game.rods[i].pos))
 
 func reset_buttons():
-	var rod_cnt = []
+	var rods = []
 	for i in range(game.rsize_h):
-		rod_cnt.append(0)
-	for i in game.rods:
-		rod_cnt[i.y] += 1
-#	for i in range(game.rsize_h):
-#		if (rod_cnt[i] == 0):
-#			rod_cnt.remove(i)
+		rods.append([])
+	for i in range(game.rods.size()):
+		rods[game.rods[i].y].append({x = game.rods[i].x, y = game.rods[i].y, id = i})
+	for i in range(rods.size()-1, -1, -1):
+		if (rods[i].empty()):
+			rods.remove(i)
 	
 	rod_count = 0
-	for i in rod_cnt:
-		rod_count += i
+	for i in rods:
+		rod_count += i.size()
 	
 	var max_x = 0
-	var max_y = rod_cnt.size()
-	for i in rod_cnt:
-		if (i > max_x):
-			max_x = i
+	var max_y = rods.size()
+	for i in rods:
+		if (i.size() > max_x):
+			max_x = i.size()
 	
 	var size_x = get_size().x / max_x
 	var size_y = get_size().y / max_y
 	var btn_size = clamp(min(size_x, size_y), min_btn_size, max_btn_size)
+	
+	var rod_offset = []
+	for i in range(rods.size()):
+		rod_offset.append([])
+	for h in range(rods.size()):
+		for i in range(rods[h].size()):
+			if (i > 0):
+				rod_offset[h].append(clamp((rods[h][i].x - rods[h][i-1].x) * btn_size, 0, max_btn_dis))
+			else:
+				rod_offset[h].append(0)
 	
 	var btn = get_node(\"RodBtn\")
 	
@@ -156,23 +166,28 @@ func reset_buttons():
 	rod_btn.clear()
 	
 	var offset_y = (get_size().y - max_y*btn_size)*0.5
-	var offset_x = []
-	var count_x = []
-	for y in range(rod_cnt.size()):
-		var btn_dis = clamp((get_size().x / (rod_cnt[game.rods[y].y]+1) - btn_size), 0, max_btn_dis)
-		offset_x.append((get_size().x - rod_cnt[y]*(btn_size+btn_dis))*0.5)
-		count_x.append(0)
-	for i in range(game.rods.size()):
-		var offset = Vector2(offset_x[game.rods[i].y], offset_y)
-		var btn_dis = clamp((get_size().x / rod_cnt[game.rods[i].y] - btn_size), 0, max_btn_dis)
-		var obj = btn.duplicate()
-		obj.set_size(Vector2(btn_size, btn_size))
-		obj.set_pos(Vector2(count_x[game.rods[i].y], game.rods[i].y*(btn_size)) + offset)
-		count_x[game.rods[i].y] += btn_size + btn_dis
-		add_child(obj)
-		obj.connect(\"pressed\", get_node(\".\"), \"_rod_btn_click\", [i])
-		obj.show()
-		rod_btn.push_back(obj)
+	for h in range(rods.size()):
+		var dis = 0
+		for i in rod_offset[h]:
+			dis += i
+		var real_dis = clamp(dis, (get_size().x - max_x*btn_size), dis)
+		var k = real_dis / dis
+		for i in rod_offset[h]:
+			i *= k
+		var offset_x = (get_size().x - max_x*btn_size - dis)*0.5
+		var offset = Vector2(offset_x, offset_y)
+		var count_x = 0
+		for w in range(rods[h].size()):
+			var obj = btn.duplicate()
+			obj.set_size(Vector2(btn_size, btn_size))
+			obj.set_pos(Vector2(rod_offset[h][w] + count_x, h*btn_size) + offset)
+			count_x += rod_offset[h][w]
+			add_child(obj)
+			obj.show()
+			obj.get_node(\"Button\").connect(\"pressed\", get_node(\".\"), \"_rod_btn_click\", [rods[h][w].id])
+			rod_btn.push_back(obj.get_node(\"Button\"))
+			obj.get_node(\"Button\").set_text(\"%d-%d\" % [rods[h][w].x, rods[h][w].y])
+			rod_btn_label.push_back(obj.get_node(\"Label\"))
 	
 	current_rod = 0
 	rod_btn[current_rod].set_pressed(true)
@@ -205,7 +220,7 @@ func _ready():
 
 
 func update_info():
-	rod_id.set_text(\"Rod num: %d\" % rod_panel.current_rod)
+	rod_id.set_text(\"Rod: %d-%d\" % [game.rods[rod_panel.current_rod].x, game.rods[rod_panel.current_rod].y])
 	rod_pos.set_text(\"Rod pos: %d\" % game.rods[rod_panel.current_rod].pos)
 
 
@@ -347,9 +362,8 @@ margin/top = 0.0
 margin/right = 0.0
 margin/bottom = 0.0
 
-[node name="RodBtn" type="Button" parent="RodPanel"]
+[node name="RodBtn" type="Panel" parent="RodPanel"]
 
-editor/display_folded = true
 visibility/visible = false
 rect/min_size = Vector2( 40, 40 )
 focus/ignore_mouse = false
@@ -360,7 +374,21 @@ margin/left = 0.0
 margin/top = 0.0
 margin/right = 12.0
 margin/bottom = 20.0
-toggle_mode = true
+
+[node name="Button" type="Button" parent="RodPanel/RodBtn"]
+
+anchor/top = 2
+anchor/right = 1
+anchor/bottom = 1
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 0.0
+margin/top = 0.34
+margin/right = 0.0
+margin/bottom = 0.0
+toggle_mode = false
 enabled_focus_mode = 2
 shortcut = null
 flat = false
@@ -368,7 +396,7 @@ flat = false
 [node name="Label" type="Label" parent="RodPanel/RodBtn"]
 
 anchor/right = 1
-anchor/bottom = 1
+anchor/bottom = 2
 focus/ignore_mouse = true
 focus/stop_mouse = true
 size_flags/horizontal = 2
@@ -376,7 +404,7 @@ size_flags/vertical = 0
 margin/left = 0.0
 margin/top = 0.0
 margin/right = 0.0
-margin/bottom = 0.0
+margin/bottom = 0.34
 align = 1
 valign = 1
 percent_visible = 1.0
