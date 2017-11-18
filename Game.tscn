@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=1]
+[gd_scene load_steps=8 format=1]
 
 [sub_resource type="GDScript" id=1]
 
@@ -6,30 +6,89 @@ script/source = "extends Node
 
 onready var rod_panel = get_node(\"RodPanel\")
 onready var reactor_panel = get_node(\"ReactorPanel\")
+onready var reactor_control = get_node(\"ReactorControl\")
+onready var main_panel = get_node(\"MainPanel\")
+onready var timer = get_node(\"Timer\")
 
 var rsize_w = 9
 var rsize_h = 9
 
 var rods = []
-var power = []
+var cells = []
+var cell_dis = []
+var cell_count
+
+const NEUT_E = 0.64e-7
+var AVR_NEUT_OUT = 2.5
+var NEUT_CYCLE = 1.0e3
+var AIR_POWER = 2.0e3
+
+var dt = 1
+
+var full_power = 0
+var avr_npower = 0
+var avr_reactivity = 1.0
 
 class rod:
 	var pos = 0
 	var x = 0
 	var y = 0
 
+class cell:
+	var exist = true
+	var x = 0
+	var y = 0
+	var id = 0
+	var npower = 0
+	var power = 0
+
 func _ready():
+	for i in range(9):
+		cell_dis.append(1/Vector2(i%3-1, i/3-1).length())
+	print(false*12)
 	reactor_start_state()
 	rod_panel.reset_buttons()
 	rod_panel.rod_update()
 
+func time(start):
+	if (start):
+		timer.start()
+	else:
+		timer.stop()
+
+func time_set(value):
+	pass
+
 func reactor_update():
+	var react = 0
+	for p in cells:
+		p.npower = p.npower*AVR_NEUT_OUT*NEUT_CYCLE
+		react += p.npower*NEUT_E / p.power
+		p.power = p.npower*NEUT_E
+		
+	for p in rods:
+		pass
+	
+	react = react / cell_count
+	
+	avr_reactivity = react
 	
 	reactor_panel.labels_update()
+	reactor_control.info_update()
 
 func reactor_start_state():
+	cell_count = 0
 	for i in range(rsize_w*rsize_h):
-		power.push_back(0)
+		var obj = cell.new()
+		obj.x = i%rsize_w
+		obj.y = i/rsize_w
+		obj.exist = (plan_default[i] != 0)
+		obj.id = i
+		obj.npower = AIR_POWER
+		obj.power = obj.npower*NEUT_E
+		if (plan_default[i] == 0):
+			cell_count += 1
+		cells.push_back(obj)
 	for h in range(rsize_h):
 		for w in range(rsize_w):
 			if (plan_default[w + h*rsize_h] == 2):
@@ -51,6 +110,31 @@ var plan_default = [0,0,1,1,1,1,1,0,0,
 					1,2,1,1,1,1,1,2,1,
 					0,1,1,2,1,2,1,1,0,
 					0,0,1,1,1,1,1,0,0]
+
+
+func _on_Timer_timeout():
+	reactor_update()
+"
+
+[sub_resource type="GDScript" id=7]
+
+script/source = "extends Panel
+
+onready var game = get_node(\"..\")
+onready var time_btn = get_node(\"Time/Button\")
+
+func _ready():
+	# Called every time the node is added to the scene.
+	# Initialization here
+	pass
+
+
+func _on_Button_pressed():
+	game.time(time_btn.is_pressed())
+
+
+func _on_HSlider_value_changed(value):
+	game.dt = pow(floor(value), 4)
 "
 
 [sub_resource type="GDScript" id=2]
@@ -79,7 +163,7 @@ func labels_update():
 	if (power_display):
 		for i in range(cell_count):
 			if (label_info[i].exist):
-				ind_labels[i].set_text(str(game.power[i]))
+				ind_labels[i].set_text(str(game.cells[i].power*1.0e-3).pad_decimals(4))
 
 func labels_set():
 	if (!power_display):
@@ -132,14 +216,18 @@ func _on_PowerDisp_toggled(pressed):
 
 script/source = "extends Panel
 
-# class member variables go here, for example:
-# var a = 2
-# var b = \"textvar\"
+onready var game = get_node(\"..\")
+
+onready var reactivity = get_node(\"Reactivity\")
+onready var period = get_node(\"Period\")
 
 func _ready():
-	# Called every time the node is added to the scene.
-	# Initialization here
+	
 	pass
+
+func info_update():
+	reactivity.set_text(str(game.avr_reactivity).pad_decimals(4))
+	period.set_text(str(1 / game.avr_reactivity).pad_decimals(4))
 "
 
 [sub_resource type="GDScript" id=4]
@@ -317,6 +405,76 @@ func _on_UPD_pressed():
 
 script/script = SubResource( 1 )
 
+[node name="MainPanel" type="Panel" parent="."]
+
+editor/display_folded = true
+anchor/right = 1
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 0.0
+margin/top = 0.0
+margin/right = 0.0
+margin/bottom = 60.0
+script/script = SubResource( 7 )
+
+[node name="Time" type="Panel" parent="MainPanel"]
+
+anchor/left = 1
+anchor/right = 1
+anchor/bottom = 1
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 200.0
+margin/top = 0.0
+margin/right = 0.0
+margin/bottom = 0.0
+
+[node name="Button" type="Button" parent="MainPanel/Time"]
+
+anchor/left = 1
+anchor/right = 1
+anchor/bottom = 1
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 60.0
+margin/top = 0.0
+margin/right = 0.0
+margin/bottom = 0.0
+toggle_mode = true
+enabled_focus_mode = 2
+shortcut = null
+text = ">"
+flat = false
+
+[node name="HSlider" type="HSlider" parent="MainPanel/Time"]
+
+anchor/right = 1
+anchor/bottom = 1
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 0
+margin/left = 4.0
+margin/top = 0.0
+margin/right = 64.0
+margin/bottom = 0.0
+range/min = 1.0
+range/max = 4.0
+range/step = 1.0
+range/page = 0.0
+range/value = 1.0
+range/exp_edit = false
+range/rounded = true
+tick_count = 4
+ticks_on_borders = true
+focus_mode = 2
+
 [node name="ReactorPanel" type="Control" parent="."]
 
 editor/display_folded = true
@@ -411,6 +569,34 @@ margin/top = 100.0
 margin/right = 0.0
 margin/bottom = 0.0
 script/script = SubResource( 3 )
+
+[node name="Reactivity" type="Label" parent="ReactorControl"]
+
+focus/ignore_mouse = true
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 0
+margin/left = 0.0
+margin/top = 0.0
+margin/right = 80.0
+margin/bottom = 14.0
+percent_visible = 1.0
+lines_skipped = 0
+max_lines_visible = -1
+
+[node name="Period" type="Label" parent="ReactorControl"]
+
+focus/ignore_mouse = true
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 0
+margin/left = 0.0
+margin/top = 14.0
+margin/right = 80.0
+margin/bottom = 28.0
+percent_visible = 1.0
+lines_skipped = 0
+max_lines_visible = -1
 
 [node name="RodPanel" type="Control" parent="."]
 
@@ -595,6 +781,7 @@ flat = false
 
 [node name="Debug" type="Button" parent="."]
 
+editor/display_folded = true
 anchor/left = 3
 anchor/right = 3
 focus/ignore_mouse = false
@@ -647,17 +834,16 @@ shortcut = null
 text = "UPD"
 flat = false
 
-[node name="Panel" type="Panel" parent="."]
+[node name="Timer" type="Timer" parent="."]
 
-anchor/right = 1
-focus/ignore_mouse = false
-focus/stop_mouse = true
-size_flags/horizontal = 2
-size_flags/vertical = 2
-margin/left = 0.0
-margin/top = 0.0
-margin/right = 0.0
-margin/bottom = 60.0
+process_mode = 1
+wait_time = 1.0
+one_shot = false
+autostart = false
+
+[connection signal="pressed" from="MainPanel/Time/Button" to="MainPanel" method="_on_Button_pressed"]
+
+[connection signal="value_changed" from="MainPanel/Time/HSlider" to="MainPanel" method="_on_HSlider_value_changed"]
 
 [connection signal="toggled" from="ReactorPanel/PowerDisp" to="ReactorPanel" method="_on_PowerDisp_toggled"]
 
@@ -670,5 +856,7 @@ margin/bottom = 60.0
 [connection signal="pressed" from="Debug" to="Debug" method="_on_Debug_pressed"]
 
 [connection signal="pressed" from="Debug/Options/UPD" to="Debug" method="_on_UPD_pressed"]
+
+[connection signal="timeout" from="Timer" to="." method="_on_Timer_timeout"]
 
 
