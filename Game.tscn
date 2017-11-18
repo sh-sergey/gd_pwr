@@ -1,10 +1,11 @@
-[gd_scene load_steps=6 format=1]
+[gd_scene load_steps=7 format=1]
 
 [sub_resource type="GDScript" id=1]
 
 script/source = "extends Node
 
 onready var rod_panel = get_node(\"RodPanel\")
+onready var reactor_panel = get_node(\"ReactorPanel\")
 
 var rsize_w = 9
 var rsize_h = 9
@@ -21,6 +22,10 @@ func _ready():
 	reactor_start_state()
 	rod_panel.reset_buttons()
 	rod_panel.rod_update()
+
+func reactor_update():
+	
+	reactor_panel.labels_update()
 
 func reactor_start_state():
 	for i in range(rsize_w*rsize_h):
@@ -60,13 +65,30 @@ const MAX_IND_SIZE = 80
 onready var img = preload(\"assets/c0.tex\")
 
 var inds = []
+var label_info = []
 var ind_labels = []
+
+var cell_count
+var power_display = false
 
 func _ready():
 	reset_ind()
 	pass
 
+func labels_update():
+	if (power_display):
+		for i in range(cell_count):
+			if (label_info[i].exist):
+				ind_labels[i].set_text(str(game.power[i]))
+
+func labels_set():
+	if (!power_display):
+		for i in range(cell_count):
+			if (label_info[i].exist):
+				ind_labels[i].set_text(\"%d-%d\" % [label_info[i].x,label_info[i].y])
+
 func reset_ind():
+	cell_count = game.rsize_w*game.rsize_h
 	var size_x = get_size().x / game.rsize_w
 	var size_y = get_size().y / game.rsize_h
 	var ind_size = clamp(min(size_x, size_y), MIN_IND_SIZE, MAX_IND_SIZE)
@@ -97,9 +119,30 @@ func reset_ind():
 			obj.show()
 			inds.push_back(obj)
 			ind_labels.push_back(label)
+			label_info.push_back({x = w, y = h, exist = (game.plan_default[w + h*game.rsize_h] != 0)})
+
+
+func _on_PowerDisp_toggled(pressed):
+	power_display = pressed
+	labels_set()
+	labels_update()
 "
 
 [sub_resource type="GDScript" id=3]
+
+script/source = "extends Panel
+
+# class member variables go here, for example:
+# var a = 2
+# var b = \"textvar\"
+
+func _ready():
+	# Called every time the node is added to the scene.
+	# Initialization here
+	pass
+"
+
+[sub_resource type="GDScript" id=4]
 
 script/source = "extends Control
 
@@ -199,7 +242,7 @@ func _rod_btn_click(id):
 	rod_control.update_info()
 "
 
-[sub_resource type="GDScript" id=4]
+[sub_resource type="GDScript" id=5]
 
 script/source = "extends Panel
 
@@ -247,7 +290,7 @@ func _on_Shift_pressed():
 		shift_btn.set_pressed(true)
 "
 
-[sub_resource type="GDScript" id=5]
+[sub_resource type="GDScript" id=6]
 
 script/source = "extends Button
 
@@ -276,6 +319,7 @@ script/script = SubResource( 1 )
 
 [node name="ReactorPanel" type="Control" parent="."]
 
+editor/display_folded = true
 anchor/right = 3
 anchor/bottom = 1
 focus/ignore_mouse = false
@@ -334,8 +378,43 @@ percent_visible = 1.0
 lines_skipped = 0
 max_lines_visible = -1
 
+[node name="PowerDisp" type="CheckButton" parent="ReactorPanel"]
+
+anchor/top = 1
+anchor/bottom = 1
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 0.0
+margin/top = 36.0
+margin/right = 160.0
+margin/bottom = 0.0
+toggle_mode = true
+enabled_focus_mode = 2
+shortcut = null
+text = "power display"
+flat = false
+align = 0
+
+[node name="ReactorControl" type="Panel" parent="."]
+
+anchor/top = 1
+anchor/right = 3
+anchor/bottom = 1
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 0.0
+margin/top = 100.0
+margin/right = 0.0
+margin/bottom = 0.0
+script/script = SubResource( 3 )
+
 [node name="RodPanel" type="Control" parent="."]
 
+editor/display_folded = true
 anchor/left = 3
 anchor/right = 1
 anchor/bottom = 1
@@ -347,7 +426,7 @@ margin/left = 0.0
 margin/top = 60.0
 margin/right = 0.0
 margin/bottom = 100.0
-script/script = SubResource( 3 )
+script/script = SubResource( 4 )
 
 [node name="Panel" type="Panel" parent="RodPanel"]
 
@@ -364,6 +443,7 @@ margin/bottom = 0.0
 
 [node name="RodBtn" type="Panel" parent="RodPanel"]
 
+editor/display_folded = true
 visibility/visible = false
 rect/min_size = Vector2( 40, 40 )
 focus/ignore_mouse = false
@@ -388,7 +468,7 @@ margin/left = 0.0
 margin/top = 0.34
 margin/right = 0.0
 margin/bottom = 0.0
-toggle_mode = false
+toggle_mode = true
 enabled_focus_mode = 2
 shortcut = null
 flat = false
@@ -413,6 +493,7 @@ max_lines_visible = -1
 
 [node name="RodControl" type="Panel" parent="."]
 
+editor/display_folded = true
 anchor/left = 3
 anchor/top = 1
 anchor/right = 1
@@ -425,7 +506,7 @@ margin/left = 0.0
 margin/top = 100.0
 margin/right = 0.0
 margin/bottom = 0.0
-script/script = SubResource( 4 )
+script/script = SubResource( 5 )
 
 [node name="RodUp" type="Button" parent="RodControl"]
 
@@ -529,7 +610,7 @@ enabled_focus_mode = 2
 shortcut = null
 text = "Dbg"
 flat = false
-script/script = SubResource( 5 )
+script/script = SubResource( 6 )
 
 [node name="Options" type="ButtonGroup" parent="Debug"]
 
@@ -565,6 +646,20 @@ enabled_focus_mode = 2
 shortcut = null
 text = "UPD"
 flat = false
+
+[node name="Panel" type="Panel" parent="."]
+
+anchor/right = 1
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 0.0
+margin/top = 0.0
+margin/right = 0.0
+margin/bottom = 60.0
+
+[connection signal="toggled" from="ReactorPanel/PowerDisp" to="ReactorPanel" method="_on_PowerDisp_toggled"]
 
 [connection signal="pressed" from="RodControl/RodUp" to="RodControl" method="_on_RodUp_pressed"]
 
