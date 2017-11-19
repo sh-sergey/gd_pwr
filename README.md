@@ -1,5 +1,9 @@
 # gd_pwr
 
-For Ushanka GodotJam
+gd_pwr (Simple reactor control game for Godot Engine)
 
-Godot 2.1.4 stable
+Created by Godot Engine v2.1.4 stable
+
+For Ushanka GodotJam (https://itch.io/jam/ushanka-gdjam)
+
+
