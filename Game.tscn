@@ -23,11 +23,15 @@ var cells = []
 var cell_dis = []
 var cell_count
 
+const NEUT_CYCLE = 1000
+const BREED_FAST_NEUT = 1.026
+const PROB_AVOID_CAPT = 0.93
+const USING_THERM_NEUT = 0.885
+const NEUT_OUTPUT = 1.3338
+const GEOM_RATIO = 0.88784204
+
 const NEUT_E = 0.64e-7
-var AVR_NEUT_OUT = 2.5
-var USING_THERM_NEUT = 0.02
-var NEUT_CYCLE = 1.0e3
-var AIR_POWER = 10
+var AIR_POWER = 1
 
 var dt = 1
 
@@ -95,33 +99,31 @@ func reactor_update():
 		hour -= 24
 		day += 1
 	
+	var breact = BREED_FAST_NEUT*PROB_AVOID_CAPT*USING_THERM_NEUT*NEUT_OUTPUT*GEOM_RATIO
 	var react = 0
 	var pwr = 0
 	
+	for p in cells:
+		p.react = breact
+		if (p.npower < 1):
+			p.npower = AIR_POWER
+	
 	for p in rods:
-		var cell = cells[p.x+p.y*rsize_w]
-		cell.rfr = (-(p.pos*p.pos) * 0.0025 + p.pos - 75) * 0.03 + 0.4
+		var x = (100 - p.pos)*0.01
+		cells[p.x + p.y*rsize_h].react += -0.005*(2.5/(1.5/(x-0.5)+x*4-2)+0.5)
 	
 	for p in cells:
 		if (p.exist):
-			var reactivity = 1
-			var esc = 0.5
-			
-			clamp(p.npower, 10.0, 2.0e15)
-			
 			for i in range(-1, 2):
 				for j in range(-1, 2):
 					var x = clamp(p.x+i, 0, rsize_w-1)
-					var y = clamp(p.y+i, 0, rsize_h-1)
-					
-					reactivity += clamp((cells[x+y*rsize_w].npower - p.npower) * 0.1 / p.npower,-esc,esc)
-			reactivity += p.rfr
-			reactivity = clamp(reactivity, 0.01, 2);
-			reactivity -= 1
-			reactivity *= dt
-			reactivity += 1
-			react += reactivity-1
-			p.react = reactivity
+					var y = clamp(p.y+j, 0, rsize_h-1)
+					if (cells[x+y*rsize_w].exist):
+						p.react *= 1 + (cells[x+y*rsize_w].npower - p.npower) / max(cells[x+y*rsize_w].npower, p.npower) * 0.0005
+			
+			p.react = exp((p.react - 1) * NEUT_CYCLE * dt)
+			react += p.react + 1
+			p.npower *= p.react
 	
 	for p in cells:
 		if (p.exist):
@@ -132,8 +134,7 @@ func reactor_update():
 	
 	full_power = pwr
 	
-	avr_reactivity = full_power / prev_power - 1
-#	avr_reactivity = react / cell_count
+	avr_reactivity = react / cell_count
 	prev_power = full_power
 	
 	task_check()
@@ -155,24 +156,6 @@ func task_check():
 			seconds = 300
 			label.set_text(\"Power %d !E (18000;20000)\" % [full_power])
 
-
-#	var react = 0
-#	for p in cells:
-#		p.npower = p.npower*AVR_NEUT_OUT*USING_THERM_NEUT*NEUT_CYCLE
-#		react += p.npower*NEUT_E / p.power
-#		p.power = p.npower*NEUT_E
-#		
-#	for p in rods:
-#		pass
-#	
-#	react = react / cell_count
-#	
-#	avr_reactivity = react
-#	
-#	main_panel.info_update()
-#	reactor_panel.labels_update()
-#	reactor_control.info_update()
-
 func reactor_start_state():
 	cell_count = 0
 	for i in range(rsize_w*rsize_h):
@@ -185,7 +168,7 @@ func reactor_start_state():
 		obj.react = 0
 		obj.power = obj.npower*NEUT_E
 		obj.rfr = 0
-		if (plan_default[i] == 0):
+		if (plan_default[i] != 0):
 			cell_count += 1
 		cells.push_back(obj)
 	for h in range(rsize_h):
@@ -199,6 +182,13 @@ func reactor_start_state():
 
 func rod_move(rod, d):
 	rods[rod].pos = clamp(rods[rod].pos + d, 0, 100)
+
+func rod_ep():
+	for p in rods:
+		p.pos = 0
+	reactor_panel.labels_update()
+	reactor_control.info_update()
+	rod_panel.rod_update()
 
 var plan_default = [0,0,1,1,1,1,1,0,0,
 					0,1,1,2,1,2,1,1,0,
@@ -219,6 +209,8 @@ func _unhandled_key_input(key_event):
 		rod_move(rod_panel.current_rod, 10)
 	elif (key_event.is_action_pressed(\"ce_down\")):
 		rod_move(rod_panel.current_rod, -10)
+	elif (key_event.scancode == KEY_E):
+		rod_ep()
 	rod_panel.rod_update()
 	rod_control.update_info()
 
@@ -240,10 +232,7 @@ func _ready():
 	pass
 
 func info_update():
-	if (game.dt == 1):
-		time_current.set_text(\"%02d:%02d:%02d day %d\" % [floor(game.second), game.minute, game.hour, game.day])
-	else:
-		time_current.set_text(\"%02d:%02d:%02d day %d (x%d)\" % [floor(game.second), game.minute, game.hour, game.day, game.dt])
+	time_current.set_text(\"%02d:%02d:%02d day %d (x%d)\" % [floor(game.second), game.minute, game.hour, game.day, game.dt])
 
 func _on_Button_pressed():
 	game.time(time_btn.is_pressed())
@@ -283,8 +272,8 @@ func labels_update():
 	if (power_display):
 		for i in range(cell_count):
 			if (label_info[i].exist):
-				ind_labels[i].set_text(str(game.cells[i].power*1.0e-3).pad_decimals(1))
-#				ind_labels[i].set_text(str(game.cells[i].npower).pad_decimals(1))
+#				ind_labels[i].set_text(str(game.cells[i].power*1.0e-3).pad_decimals(1))
+				ind_labels[i].set_text(str(game.cells[i].npower).pad_decimals(3))
 #				ind_labels[i].set_text(str(game.cells[i].react).pad_decimals(2))
 
 func labels_set():
@@ -351,6 +340,10 @@ func info_update():
 	reactivity.set_text(str(game.avr_reactivity).pad_decimals(4))
 	period.set_text(str(1 / game.avr_reactivity).pad_decimals(1))
 	power.set_text(str(game.full_power).pad_decimals(1))
+
+
+func _on_Button_pressed():
+	game.rod_ep()
 "
 
 [sub_resource type="StyleBoxFlat" id=5]
@@ -582,7 +575,6 @@ flat = false
 
 [node name="HSlider" type="HSlider" parent="MainPanel/Time"]
 
-visibility/visible = false
 anchor/right = 1
 anchor/bottom = 1
 focus/ignore_mouse = false
@@ -742,7 +734,6 @@ align = 0
 
 [node name="ReactorControl" type="Panel" parent="."]
 
-editor/display_folded = true
 anchor/top = 1
 anchor/right = 3
 anchor/bottom = 1
@@ -950,6 +941,26 @@ valign = 1
 percent_visible = 1.0
 lines_skipped = 0
 max_lines_visible = -1
+
+[node name="Button" type="Button" parent="ReactorControl"]
+
+anchor/left = 1
+anchor/top = 1
+anchor/right = 1
+anchor/bottom = 1
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 60.0
+margin/top = 40.0
+margin/right = 0.0
+margin/bottom = 0.0
+toggle_mode = false
+enabled_focus_mode = 2
+shortcut = null
+text = "EP"
+flat = false
 
 [node name="RodPanel" type="Control" parent="."]
 
@@ -1215,6 +1226,8 @@ autostart = false
 [connection signal="pressed" from="MainPanel/HelpBtn" to="MainPanel" method="_on_HelpBtn_pressed"]
 
 [connection signal="toggled" from="ReactorPanel/PowerDisp" to="ReactorPanel" method="_on_PowerDisp_toggled"]
+
+[connection signal="pressed" from="ReactorControl/Button" to="ReactorControl" method="_on_Button_pressed"]
 
 [connection signal="pressed" from="RodControl/Rod/Up" to="RodControl" method="_on_RodUp_pressed"]
 
