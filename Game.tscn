@@ -1,401 +1,16 @@
-[gd_scene load_steps=11 format=1]
+[gd_scene load_steps=12 format=1]
 
-[ext_resource path="res://assets/l0.tex" type="Texture" id=1]
-[ext_resource path="res://assets/lcd.fnt" type="BitmapFont" id=2]
+[ext_resource path="res://Game.gd" type="Script" id=1]
+[ext_resource path="res://MainPanel.gd" type="Script" id=2]
+[ext_resource path="res://TaskControl.gd" type="Script" id=3]
+[ext_resource path="res://ReactorPanel.gd" type="Script" id=4]
+[ext_resource path="res://assets/l0.tex" type="Texture" id=5]
+[ext_resource path="res://ReactorControl.gd" type="Script" id=6]
+[ext_resource path="res://assets/lcd.fnt" type="BitmapFont" id=7]
+[ext_resource path="res://RodPanel.gd" type="Script" id=8]
+[ext_resource path="res://RodControl.gd" type="Script" id=9]
 
-[sub_resource type="GDScript" id=1]
-
-script/source = "extends Node
-
-onready var rod_panel = get_node(\"RodPanel\")
-onready var rod_control = get_node(\"RodControl\")
-onready var reactor_panel = get_node(\"ReactorPanel\")
-onready var reactor_control = get_node(\"ReactorControl\")
-onready var main_panel = get_node(\"MainPanel\")
-onready var timer = get_node(\"Timer\")
-onready var help = get_node(\"Help\")
-onready var label = get_node(\"MainPanel/Label\")
-
-var rsize_w = 9
-var rsize_h = 9
-
-var rods = []
-var cells = []
-var cell_dis = []
-var cell_count
-
-var tmp_npower = []
-
-const NEUT_CYCLE = 1000
-const BASE_REACT = 1.0001
-
-const NEUT_E = 0.64e-7
-var AIR_POWER = 1
-
-var breact
-
-var dt = 1
-
-var second = 0
-var minute = 0
-var hour = 0
-var day = 1
-
-var full_power = 0
-var prev_power = 1
-var avr_npower = 0
-var avr_reactivity = 1.0
-
-var seconds = 300
-var complete = false
-
-class rod:
-	var pos = 0
-	var x = 0
-	var y = 0
-	var cell
-
-class cell:
-	var exist = true
-	var x = 0
-	var y = 0
-	var id = 0
-	var nb = []
-	var npower = 0
-	var power = 0
-	var rfr = 0
-	var react = 0
-
-func _ready():
-	OS.set_window_position((OS.get_screen_size() - OS.get_window_size()) / 2)
-	
-	set_process_unhandled_key_input(true)
-	
-	for i in range(9):
-		cell_dis.append(1/Vector2(i%3-1, i/3-1).length())
-	reactor_start_state()
-	
-	help.popup()
-
-func time(start):
-	if (start):
-		timer.start()
-	else:
-		timer.stop()
-
-func time_set(value):
-	pass
-
-func reactor_update():
-	second += dt
-	while (second >= 60):
-		second -= 60
-		minute += 1
-	if (minute > 59):
-		minute -= 60
-		hour += 1
-	if (hour > 23):
-		hour -= 24
-		day += 1
-	
-	var react = 0
-	var pwr = 0
-	
-	for p in cells:
-		p.react = BASE_REACT
-		if (p.npower < 1):
-			p.npower = AIR_POWER
-	
-	for p in rods:
-		var x = (100 - p.pos)*0.01
-		p.cell.react += -0.005*(2.5/(1.5/(x-0.5)+x*4-2)+0.5)
-	
-	for p in cells:
-		if (p.exist):
-			
-			p.react = exp((p.react - 1) * NEUT_CYCLE * dt)
-			p.npower *= p.react
-			
-			for i in p.nb:
-				if (i):
-					tmp_npower[i.id] += p.npower*0.14
-	
-	
-	
-	for p in cells:
-		if (p.exist):
-			p.power = p.npower*NEUT_E*50*9
-			react = max(p.npower/p.rfr - 1, react)
-			p.rfr = p.npower
-			p.npower = tmp_npower[p.x+p.y*rsize_w]
-			pwr += p.power
-			
-	
-	for i in range(rsize_h*rsize_w):
-		tmp_npower[i] = 0
-	
-	full_power = pwr
-	
-	avr_reactivity = react
-	prev_power = full_power
-	
-	task_check()
-	
-	main_panel.info_update()
-	reactor_panel.labels_update()
-	reactor_control.info_update()
-
-func task_check():
-	if (!complete):
-		if (full_power > 18e3 && full_power < 20e3):
-			seconds -= 1*dt
-			if (seconds == 0):
-				complete = true
-				label.set_text(\"Task completed!\")
-			else:
-				label.set_text(\"Power %d2 E (18000;20000) time remained %d\" % [full_power, seconds])
-		else:
-			seconds = 300
-			label.set_text(\"Power %d !E (18000;20000)\" % [full_power])
-
-func reactor_reset():
-	reactor_start_state()
-
-func reactor_start_state():
-	cell_count = 0
-	second = 0
-	minute = 0
-	hour = 0
-	day = 0
-	dt = 1
-	tmp_npower.clear()
-	cells.clear()
-	rods.clear()
-	for i in range(rsize_h*rsize_w):
-		tmp_npower.append(0)
-	for i in range(rsize_w*rsize_h):
-		var obj = cell.new()
-		obj.x = i%rsize_w
-		obj.y = i/rsize_w
-		obj.exist = (plan_default[i] != 0)
-		obj.id = i
-		obj.npower = AIR_POWER
-		obj.react = 0
-		obj.power = obj.npower*NEUT_E
-		obj.rfr = AIR_POWER
-		if (plan_default[i] != 0):
-			cell_count += 1
-		cells.push_back(obj)
-	for p in cells:
-		for i in range(-1, 2):
-			for j in range(-1, 2):
-				var x = p.x+i
-				var y = p.y+j
-				if ((x >= 0 && x < rsize_w) && (y >= 0 && y < rsize_h)):
-					if (x+y*rsize_w != p.id && cells[x+y*rsize_w].exist):
-						p.nb.push_back(cells[x+y*rsize_w])
-					else:
-						p.nb.push_back(null)
-				else:
-					p.nb.push_back(null)
-	for h in range(rsize_h):
-		for w in range(rsize_w):
-			if (plan_default[w + h*rsize_h] == 2):
-				var obj = rod.new()
-				obj.x = w
-				obj.y = h
-				obj.cell = cells[w + h*rsize_h]
-				rods.push_back(obj)
-	
-	reactor_control.info_update()
-	rod_panel.reset_buttons()
-	rod_panel.rod_update()
-	main_panel.info_update()
-	task_check()
-
-func rod_move(rod, d):
-	rods[rod].pos = clamp(rods[rod].pos + d, 0, 100)
-
-func rod_ep():
-	for p in rods:
-		p.pos = 0
-	reactor_panel.labels_update()
-	reactor_control.info_update()
-	rod_panel.rod_update()
-
-var plan_default = [0,0,1,1,1,1,1,0,0,
-					0,1,1,2,1,2,1,1,0,
-					1,2,1,1,1,1,1,2,1,
-					1,1,1,2,1,2,1,1,1,
-					1,2,1,1,1,1,1,2,1,
-					1,1,1,2,1,2,1,1,1,
-					1,2,1,1,1,1,1,2,1,
-					0,1,1,2,1,2,1,1,0,
-					0,0,1,1,1,1,1,0,0]
-
-func _unhandled_key_input(key_event):
-	if (key_event.is_action_pressed(\"cs_up\")):
-		rod_move(rod_panel.current_rod, 1)
-	elif (key_event.is_action_pressed(\"cs_down\")):
-		rod_move(rod_panel.current_rod, -1)
-	elif (key_event.is_action_pressed(\"ce_up\")):
-		rod_move(rod_panel.current_rod, 10)
-	elif (key_event.is_action_pressed(\"ce_down\")):
-		rod_move(rod_panel.current_rod, -10)
-	elif (key_event.scancode == KEY_E):
-		rod_ep()
-	rod_panel.rod_update()
-	rod_control.update_info()
-
-func _on_Timer_timeout():
-	reactor_update()
-"
-
-[sub_resource type="GDScript" id=2]
-
-script/source = "extends Panel
-
-onready var game = get_node(\"..\")
-onready var time_btn = get_node(\"Time/Button\")
-onready var time_current = get_node(\"Time/Current\")
-
-func _ready():
-	# Called every time the node is added to the scene.
-	# Initialization here
-	pass
-
-func info_update():
-	time_current.set_text(\"%02d:%02d:%02d day %d\" % [floor(game.second), game.minute, game.hour, game.day])
-
-func _on_Button_pressed():
-	game.time(time_btn.is_pressed())
-
-
-func _on_HSlider_value_changed(value):
-	game.dt = pow(floor(value), 2)
-
-
-func _on_HelpBtn_pressed():
-	game.help.popup()
-
-
-func _on_ResetBtn_pressed():
-	game.reactor_reset()
-"
-
-[sub_resource type="GDScript" id=3]
-
-script/source = "extends Control
-
-onready var game = get_node(\"..\")
-
-const MIN_IND_SIZE = 20
-const MAX_IND_SIZE = 80
-
-onready var img = preload(\"assets/c0.tex\")
-
-var inds = []
-var label_info = []
-var ind_labels = []
-var ind_lamps = []
-
-var lamp_color = [Color(0.65, 1, 0.5, 1), Color(1, 1, 1, 0), 
-				  Color(1, 0.85, 0, 1), Color(0.1, 0.42, 0, 1), Color(1, 0, 0, 1)]
-
-var cell_count
-var power_display = false
-
-func _ready():
-	reset_ind()
-	pass
-
-func labels_update():
-	if (power_display):
-		var coeff = 1/(game.full_power*(game.cell_count*2)-0.01)
-		for i in range(cell_count):
-			if (label_info[i].exist):
-				ind_labels[i].set_text(str(game.cells[i].power).pad_decimals(1))
-#				ind_labels[i].set_text(str(game.cells[i].npower).pad_decimals(1))
-#				ind_labels[i].set_text(str(game.cells[i].react).pad_decimals(2))
-				if (game.full_power > 10):
-					var a = clamp(game.cells[i].power*coeff, -1 , 3)
-					a = floor(a)
-					a -= 1
-					ind_lamps[i].set_modulate(lamp_color[a])
-
-func labels_set():
-	if (!power_display):
-		for i in range(cell_count):
-			if (label_info[i].exist):
-				ind_labels[i].set_text(\"%d-%d\" % [label_info[i].x,label_info[i].y])
-
-func reset_ind():
-	cell_count = game.rsize_w*game.rsize_h
-	var size_x = get_size().x / game.rsize_w
-	var size_y = get_size().y / game.rsize_h
-	var ind_size = clamp(min(size_x, size_y), MIN_IND_SIZE, MAX_IND_SIZE)
-	
-	var ind = get_node(\"Indicator\")
-	
-	ind_labels.clear()
-	label_info.clear()
-	inds.clear()
-	
-	var offset = Vector2(get_size().x - game.rsize_w*ind_size, get_size().y - game.rsize_h*ind_size)*0.5
-	for h in range(game.rsize_h):
-		for w in range(game.rsize_w):
-			var obj = ind.duplicate()
-			obj.set_size(Vector2(ind_size, ind_size))
-			obj.set_pos(Vector2(w*ind_size, h*ind_size) + offset)
-			add_child(obj)
-			var label = obj.get_node(\"Label\")
-			if (game.plan_default[w + h*game.rsize_h] == 1):
-				obj.set_texture(img)
-				obj.set_modulate(Color(0.4, 0.4, 0.4))
-			elif (game.plan_default[w + h*game.rsize_h] == 2):
-				obj.set_texture(img)
-				obj.set_modulate(Color(0.2, 0.4, 0.2))
-			var lamp = obj.get_node(\"Lamp\")
-			lamp.set_modulate(lamp_color[1])
-			obj.show()
-			inds.push_back(obj)
-			ind_labels.push_back(label)
-			ind_lamps.push_back(lamp)
-			label_info.push_back({x = w, y = h, exist = (game.plan_default[w + h*game.rsize_h] != 0)})
-	labels_set()
-
-
-func _on_PowerDisp_toggled(pressed):
-	power_display = pressed
-	labels_set()
-	labels_update()
-"
-
-[sub_resource type="GDScript" id=4]
-
-script/source = "extends Panel
-
-onready var game = get_node(\"..\")
-
-onready var reactivity = get_node(\"Reactivity/Value\")
-onready var period = get_node(\"Period/Value\")
-onready var power = get_node(\"Power/Value\")
-
-func _ready():
-	
-	pass
-
-func info_update():
-	reactivity.set_text(str(game.avr_reactivity).pad_decimals(4))
-	period.set_text(str(1 / game.avr_reactivity).pad_decimals(1))
-	power.set_text(str(game.full_power).pad_decimals(1))
-
-
-func _on_Button_pressed():
-	game.rod_ep()
-"
-
-[sub_resource type="StyleBoxFlat" id=5]
+[sub_resource type="StyleBoxFlat" id=1]
 
 content_margin/left = -1.0
 content_margin/right = -1.0
@@ -408,110 +23,7 @@ border_size = 0
 border_blend = true
 draw_bg = true
 
-[sub_resource type="GDScript" id=6]
-
-script/source = "extends Control
-
-onready var game = get_node(\"..\")
-onready var rod_control = get_node(\"../RodControl\")
-
-var rod_btn_mode = false
-var rod_count
-
-var rod_btn = []
-var rod_btn_label = []
-
-var current_rod
-
-var min_btn_size = 40
-var max_btn_size = 80
-var max_btn_dis = 320
-
-func _ready():
-	pass
-
-func rod_update():
-	for i in range(rod_count):
-		rod_btn_label[i].set_text(str(game.rods[i].pos))
-
-func reset_buttons():
-	rod_btn.clear()
-	rod_btn_label.clear()
-	var rods = []
-	for i in range(game.rsize_h):
-		rods.append([])
-	for i in range(game.rods.size()):
-		rods[game.rods[i].y].append({x = game.rods[i].x, y = game.rods[i].y, id = i})
-	for i in range(rods.size()-1, -1, -1):
-		if (rods[i].empty()):
-			rods.remove(i)
-	
-	rod_count = 0
-	for i in rods:
-		rod_count += i.size()
-	
-	var max_x = 0
-	var max_y = rods.size()
-	for i in rods:
-		if (i.size() > max_x):
-			max_x = i.size()
-	
-	var size_x = get_size().x / max_x
-	var size_y = get_size().y / max_y
-	var btn_size = clamp(min(size_x, size_y), min_btn_size, max_btn_size)
-	
-	var rod_offset = []
-	for i in range(rods.size()):
-		rod_offset.append([])
-	for h in range(rods.size()):
-		for i in range(rods[h].size()):
-			if (i > 0):
-				rod_offset[h].append(clamp((rods[h][i].x - rods[h][i-1].x) * btn_size, 0, max_btn_dis))
-			else:
-				rod_offset[h].append(0)
-	
-	var btn = get_node(\"RodBtn\")
-	
-	for i in rod_btn:
-		i.free()
-	rod_btn.clear()
-	
-	var offset_y = (get_size().y - max_y*btn_size)*0.5
-	for h in range(rods.size()):
-		var dis = 0
-		for i in rod_offset[h]:
-			dis += i
-		var real_dis = clamp(dis, (get_size().x - max_x*btn_size), dis)
-		var k = real_dis / dis
-		for i in rod_offset[h]:
-			i *= k
-		var offset_x = (get_size().x - max_x*btn_size - dis)*0.5
-		var offset = Vector2(offset_x, offset_y)
-		var count_x = 0
-		for w in range(rods[h].size()):
-			var obj = btn.duplicate()
-			obj.set_size(Vector2(btn_size, btn_size))
-			obj.set_pos(Vector2(rod_offset[h][w] + count_x, h*btn_size) + offset)
-			count_x += rod_offset[h][w]
-			add_child(obj)
-			obj.show()
-			obj.get_node(\"Button\").connect(\"pressed\", get_node(\".\"), \"_rod_btn_click\", [rods[h][w].id])
-			rod_btn.push_back(obj.get_node(\"Button\"))
-			obj.get_node(\"Button\").set_text(\"%d-%d\" % [rods[h][w].x, rods[h][w].y])
-			rod_btn_label.push_back(obj.get_node(\"Label\"))
-	
-	current_rod = 0
-	rod_control.update_info()
-	rod_btn[current_rod].set_pressed(true)
-
-func _rod_btn_click(id):
-	rod_btn[current_rod].set_pressed(false)
-	current_rod = id
-	rod_btn[current_rod].set_pressed(true)
-	rod_control.update_info()
-"
-
-[sub_resource type="StyleBoxFlat" id=7]
+[sub_resource type="StyleBoxFlat" id=2]
 
 content_margin/left = -1.0
 content_margin/right = -1.0
@@ -524,61 +36,12 @@ border_size = 0
 border_blend = true
 draw_bg = true
 
-[sub_resource type="GDScript" id=8]
-
-script/source = "extends Panel
-
-onready var game = get_node(\"..\")
-onready var rod_panel = get_node(\"../RodPanel\")
-
-onready var rod_id = get_node(\"Rod/Id\")
-onready var rod_pos = get_node(\"Rod/Pos\")
-onready var shift_btn = get_node(\"Rod/Shift\")
-
-var shift = false
-var rod_mul = 1
-
-func _ready():
-	
-	pass
-
-
-
-func update_info():
-	rod_id.set_text(\"Rod: %d-%d\" % [game.rods[rod_panel.current_rod].x, game.rods[rod_panel.current_rod].y])
-	rod_pos.set_text(\"Rod pos: %d\" % game.rods[rod_panel.current_rod].pos)
-
-
-func _on_RodUp_pressed():
-	game.rod_move(rod_panel.current_rod, 1 * rod_mul)
-	update_info()
-	rod_panel.rod_update()
-
-
-func _on_RodDown_pressed():
-	game.rod_move(rod_panel.current_rod, -1 * rod_mul)
-	update_info()
-	rod_panel.rod_update()
-
-
-func _on_Shift_pressed():
-	if (shift):
-		shift = false
-		rod_mul = 1
-		shift_btn.set_pressed(false)
-	else:
-		shift = true
-		rod_mul = 10
-		shift_btn.set_pressed(true)
-"
-
 [node name="Game" type="Node"]
 
-script/script = SubResource( 1 )
+script/script = ExtResource( 1 )
 
 [node name="MainPanel" type="Panel" parent="."]
 
-editor/display_folded = true
 anchor/right = 1
 focus/ignore_mouse = false
 focus/stop_mouse = true
@@ -588,7 +51,7 @@ margin/left = 0.0
 margin/top = 0.0
 margin/right = 0.0
 margin/bottom = 60.0
-script/script = SubResource( 2 )
+script/script = ExtResource( 2 )
 
 [node name="Time" type="Panel" parent="MainPanel"]
 
@@ -626,7 +89,6 @@ flat = false
 
 [node name="HSlider" type="HSlider" parent="MainPanel/Time"]
 
-visibility/visible = false
 anchor/right = 1
 anchor/bottom = 1
 focus/ignore_mouse = false
@@ -701,7 +163,7 @@ shortcut = null
 text = "Reset"
 flat = false
 
-[node name="Label" type="Label" parent="MainPanel"]
+[node name="TaskControl" type="Label" parent="MainPanel"]
 
 anchor/left = 3
 anchor/top = 3
@@ -720,8 +182,9 @@ valign = 1
 percent_visible = 1.0
 lines_skipped = 0
 max_lines_visible = -1
+script/script = ExtResource( 3 )
 
-[node name="ReactorPanel" type="Control" parent="."]
+[node name="LeftPanel" type="TabContainer" parent="."]
 
 editor/display_folded = true
 anchor/right = 3
@@ -733,10 +196,26 @@ size_flags/vertical = 2
 margin/left = 0.0
 margin/top = 60.0
 margin/right = 0.0
-margin/bottom = 100.0
-script/script = SubResource( 3 )
+margin/bottom = 0.0
+tab_align = 1
+tabs_visible = true
 
-[node name="Panel" type="Panel" parent="ReactorPanel"]
+[node name="ReactorPanel" type="Control" parent="LeftPanel"]
+
+editor/display_folded = true
+anchor/right = 1
+anchor/bottom = 1
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 4.0
+margin/top = 32.0
+margin/right = 4.0
+margin/bottom = 4.0
+script/script = ExtResource( 4 )
+
+[node name="Panel" type="Panel" parent="LeftPanel/ReactorPanel"]
 
 anchor/right = 1
 anchor/bottom = 1
@@ -747,9 +226,9 @@ size_flags/vertical = 2
 margin/left = 0.0
 margin/top = 0.0
 margin/right = 0.0
-margin/bottom = 0.0
+margin/bottom = 100.0
 
-[node name="Indicator" type="TextureFrame" parent="ReactorPanel"]
+[node name="Indicator" type="TextureFrame" parent="LeftPanel/ReactorPanel"]
 
 editor/display_folded = true
 visibility/visible = false
@@ -764,7 +243,7 @@ margin/bottom = 40.0
 expand = true
 stretch_mode = 0
 
-[node name="Label" type="Label" parent="ReactorPanel/Indicator"]
+[node name="Label" type="Label" parent="LeftPanel/ReactorPanel/Indicator"]
 
 anchor/right = 1
 anchor/bottom = 1
@@ -783,7 +262,7 @@ percent_visible = 1.0
 lines_skipped = 0
 max_lines_visible = -1
 
-[node name="Lamp" type="TextureFrame" parent="ReactorPanel/Indicator"]
+[node name="Lamp" type="TextureFrame" parent="LeftPanel/ReactorPanel/Indicator"]
 
 anchor/right = 1
 anchor/bottom = 1
@@ -795,11 +274,11 @@ margin/left = 0.0
 margin/top = 0.0
 margin/right = 0.0
 margin/bottom = 0.0
-texture = ExtResource( 1 )
+texture = ExtResource( 5 )
 expand = true
 stretch_mode = 0
 
-[node name="PowerDisp" type="CheckButton" parent="ReactorPanel"]
+[node name="PowerDisp" type="CheckButton" parent="LeftPanel/ReactorPanel"]
 
 anchor/top = 1
 anchor/bottom = 1
@@ -808,9 +287,9 @@ focus/stop_mouse = true
 size_flags/horizontal = 2
 size_flags/vertical = 2
 margin/left = 0.0
-margin/top = 36.0
-margin/right = 80.0
-margin/bottom = 0.0
+margin/top = 138.0
+margin/right = 115.0
+margin/bottom = 102.0
 toggle_mode = true
 enabled_focus_mode = 2
 shortcut = null
@@ -818,23 +297,23 @@ text = "power"
 flat = false
 align = 0
 
-[node name="ReactorControl" type="Panel" parent="."]
+[node name="ReactorControl" type="Panel" parent="LeftPanel/ReactorPanel"]
 
 editor/display_folded = true
 anchor/top = 1
-anchor/right = 3
+anchor/right = 1
 anchor/bottom = 1
 focus/ignore_mouse = false
 focus/stop_mouse = true
 size_flags/horizontal = 2
 size_flags/vertical = 2
 margin/left = 0.0
-margin/top = 100.0
+margin/top = 96.0
 margin/right = 0.0
 margin/bottom = 0.0
-script/script = SubResource( 4 )
+script/script = ExtResource( 6 )
 
-[node name="Reactivity" type="Panel" parent="ReactorControl"]
+[node name="Reactivity" type="Panel" parent="LeftPanel/ReactorPanel/ReactorControl"]
 
 editor/display_folded = true
 focus/ignore_mouse = false
@@ -846,7 +325,7 @@ margin/top = 0.0
 margin/right = 140.0
 margin/bottom = 28.0
 
-[node name="Panel" type="Panel" parent="ReactorControl/Reactivity"]
+[node name="Panel" type="Panel" parent="LeftPanel/ReactorPanel/ReactorControl/Reactivity"]
 
 anchor/left = 1
 anchor/right = 1
@@ -859,9 +338,9 @@ margin/left = 70.0
 margin/top = 0.0
 margin/right = 0.0
 margin/bottom = 0.0
-custom_styles/panel = SubResource( 5 )
+custom_styles/panel = SubResource( 1 )
 
-[node name="Value" type="Label" parent="ReactorControl/Reactivity"]
+[node name="Value" type="Label" parent="LeftPanel/ReactorPanel/ReactorControl/Reactivity"]
 
 anchor/left = 1
 anchor/right = 1
@@ -874,7 +353,7 @@ margin/left = 70.0
 margin/top = 0.0
 margin/right = 0.0
 margin/bottom = 0.0
-custom_fonts/font = ExtResource( 2 )
+custom_fonts/font = ExtResource( 7 )
 align = 1
 valign = 1
 clip_text = true
@@ -882,7 +361,7 @@ percent_visible = 1.0
 lines_skipped = 0
 max_lines_visible = -1
 
-[node name="Label" type="Label" parent="ReactorControl/Reactivity"]
+[node name="Label" type="Label" parent="LeftPanel/ReactorPanel/ReactorControl/Reactivity"]
 
 anchor/bottom = 1
 focus/ignore_mouse = true
@@ -900,7 +379,7 @@ percent_visible = 1.0
 lines_skipped = 0
 max_lines_visible = -1
 
-[node name="Period" type="Panel" parent="ReactorControl"]
+[node name="Period" type="Panel" parent="LeftPanel/ReactorPanel/ReactorControl"]
 
 editor/display_folded = true
 focus/ignore_mouse = false
@@ -912,7 +391,7 @@ margin/top = 32.0
 margin/right = 140.0
 margin/bottom = 60.0
 
-[node name="Panel" type="Panel" parent="ReactorControl/Period"]
+[node name="Panel" type="Panel" parent="LeftPanel/ReactorPanel/ReactorControl/Period"]
 
 anchor/left = 1
 anchor/right = 1
@@ -925,9 +404,9 @@ margin/left = 70.0
 margin/top = 0.0
 margin/right = 0.0
 margin/bottom = 0.0
-custom_styles/panel = SubResource( 5 )
+custom_styles/panel = SubResource( 1 )
 
-[node name="Value" type="Label" parent="ReactorControl/Period"]
+[node name="Value" type="Label" parent="LeftPanel/ReactorPanel/ReactorControl/Period"]
 
 anchor/left = 1
 anchor/right = 1
@@ -940,7 +419,7 @@ margin/left = 70.0
 margin/top = 0.0
 margin/right = 0.0
 margin/bottom = 0.0
-custom_fonts/font = ExtResource( 2 )
+custom_fonts/font = ExtResource( 7 )
 align = 1
 valign = 1
 clip_text = true
@@ -948,7 +427,7 @@ percent_visible = 1.0
 lines_skipped = 0
 max_lines_visible = -1
 
-[node name="Label" type="Label" parent="ReactorControl/Period"]
+[node name="Label" type="Label" parent="LeftPanel/ReactorPanel/ReactorControl/Period"]
 
 anchor/bottom = 1
 focus/ignore_mouse = true
@@ -966,7 +445,7 @@ percent_visible = 1.0
 lines_skipped = 0
 max_lines_visible = -1
 
-[node name="Power" type="Panel" parent="ReactorControl"]
+[node name="Power" type="Panel" parent="LeftPanel/ReactorPanel/ReactorControl"]
 
 editor/display_folded = true
 focus/ignore_mouse = false
@@ -978,7 +457,7 @@ margin/top = 64.0
 margin/right = 140.0
 margin/bottom = 92.0
 
-[node name="Panel" type="Panel" parent="ReactorControl/Power"]
+[node name="Panel" type="Panel" parent="LeftPanel/ReactorPanel/ReactorControl/Power"]
 
 anchor/left = 1
 anchor/right = 1
@@ -991,9 +470,9 @@ margin/left = 70.0
 margin/top = 0.0
 margin/right = 0.0
 margin/bottom = 0.0
-custom_styles/panel = SubResource( 5 )
+custom_styles/panel = SubResource( 1 )
 
-[node name="Value" type="Label" parent="ReactorControl/Power"]
+[node name="Value" type="Label" parent="LeftPanel/ReactorPanel/ReactorControl/Power"]
 
 anchor/left = 1
 anchor/right = 1
@@ -1006,7 +485,7 @@ margin/left = 70.0
 margin/top = 0.0
 margin/right = 0.0
 margin/bottom = 0.0
-custom_fonts/font = ExtResource( 2 )
+custom_fonts/font = ExtResource( 7 )
 align = 1
 valign = 1
 clip_text = true
@@ -1014,7 +493,7 @@ percent_visible = 1.0
 lines_skipped = 0
 max_lines_visible = -1
 
-[node name="Label" type="Label" parent="ReactorControl/Power"]
+[node name="Label" type="Label" parent="LeftPanel/ReactorPanel/ReactorControl/Power"]
 
 anchor/bottom = 1
 focus/ignore_mouse = true
@@ -1032,7 +511,7 @@ percent_visible = 1.0
 lines_skipped = 0
 max_lines_visible = -1
 
-[node name="Button" type="Button" parent="ReactorControl"]
+[node name="Button" type="Button" parent="LeftPanel/ReactorPanel/ReactorControl"]
 
 anchor/left = 1
 anchor/top = 1
@@ -1052,6 +531,22 @@ shortcut = null
 text = "EP"
 flat = false
 
+[node name="Button 2" type="Button" parent="LeftPanel/ReactorPanel/ReactorControl"]
+
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 446.0
+margin/top = 20.0
+margin/right = 504.0
+margin/bottom = 53.0
+toggle_mode = false
+enabled_focus_mode = 2
+shortcut = null
+text = "RU"
+flat = false
+
 [node name="RodPanel" type="Control" parent="."]
 
 editor/display_folded = true
@@ -1066,7 +561,7 @@ margin/left = 0.0
 margin/top = 60.0
 margin/right = 0.0
 margin/bottom = 100.0
-script/script = SubResource( 6 )
+script/script = ExtResource( 8 )
 
 [node name="Panel" type="Panel" parent="RodPanel"]
 
@@ -1094,7 +589,7 @@ margin/left = 0.0
 margin/top = 0.0
 margin/right = 12.0
 margin/bottom = 20.0
-custom_styles/panel = SubResource( 7 )
+custom_styles/panel = SubResource( 2 )
 
 [node name="Button" type="Button" parent="RodPanel/RodBtn"]
 
@@ -1126,7 +621,7 @@ margin/left = 0.0
 margin/top = 0.0
 margin/right = 0.0
 margin/bottom = 0.475
-custom_fonts/font = ExtResource( 2 )
+custom_fonts/font = ExtResource( 7 )
 text = "123"
 align = 1
 valign = 1
@@ -1149,7 +644,7 @@ margin/left = 0.0
 margin/top = 100.0
 margin/right = 0.0
 margin/bottom = 0.0
-script/script = SubResource( 8 )
+script/script = ExtResource( 9 )
 
 [node name="Rod" type="Panel" parent="RodControl"]
 
@@ -1252,7 +747,6 @@ flat = false
 
 [node name="Help" type="WindowDialog" parent="."]
 
-editor/display_folded = true
 visibility/visible = false
 anchor/left = 3
 anchor/top = 3
@@ -1284,17 +778,17 @@ margin/right = 4.0
 margin/bottom = 4.0
 text = "Welcome to gd_pwr game!
 
-This is a simple game about controlling a nuclear reactor. The game was made in a week, so it has little amount of content and gameplay features.
+This is a simple game about controlling a nuclear reactor.
 
 Your task is to increase and hold reactor's thermal power (signed as \"Power\", on down left panel) in range from 18000 to 20000. You should hold this power during 5 in-game minutes.
 
-To control reactor's power you need to move rods up and down.
+To control reactor's power you need to move rods up and down:
 -Choose a control rod on right panel
--To increase the power in an area lift a control rod up by clicking button ( ^ )(down right panel). To decrease the power turn off the control rod by clicking ( v )
+-To increase the power in an area move a control rod up by clicking button ( ^ )(down right panel). To decrease the power move the control rod down by clicking ( v )
 
 Look after the period of the reactor, period less than 5-10 seconds is dangerous and may lead to an uncontrollable power growth
 
-Also, you can use <W> (>) and <S> (<) keys to move control rod. You can use <0> and <9> to move rods on 10 positions. EP button (<E>) down control rods to reduce reactor power
+Also, you can use keyboard <W> (>) and <S> (<) keys to move control rod. You can use <0> and <9> to move rods on 10 positions. EP button (<E>) down control rods to reduce reactor power
 "
 autowrap = true
 clip_text = true
@@ -1317,9 +811,11 @@ autostart = false
 
 [connection signal="pressed" from="MainPanel/ResetBtn" to="MainPanel" method="_on_ResetBtn_pressed"]
 
-[connection signal="toggled" from="ReactorPanel/PowerDisp" to="ReactorPanel" method="_on_PowerDisp_toggled"]
+[connection signal="toggled" from="LeftPanel/ReactorPanel/PowerDisp" to="LeftPanel/ReactorPanel" method="_on_PowerDisp_toggled"]
 
-[connection signal="pressed" from="ReactorControl/Button" to="ReactorControl" method="_on_Button_pressed"]
+[connection signal="pressed" from="LeftPanel/ReactorPanel/ReactorControl/Button" to="LeftPanel/ReactorPanel/ReactorControl" method="_on_Button_pressed"]
+
+[connection signal="pressed" from="LeftPanel/ReactorPanel/ReactorControl/Button 2" to="LeftPanel/ReactorPanel/ReactorControl" method="_on_Button_2_pressed"]
 
 [connection signal="pressed" from="RodControl/Rod/Up" to="RodControl" method="_on_RodUp_pressed"]
 
