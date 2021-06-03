@@ -105,7 +105,7 @@ func reactor_update():
 			p.npower = AIR_POWER
 	
 	for p in rods:
-		var x = (100 - p.pos)*0.01
+		var x = (100 - p.position)*0.01
 		p.sector.react += -0.005*(2.5/(1.5/(x-0.5)+x*4-2)+0.5)
 	
 	for s in sectors:
@@ -212,19 +212,19 @@ func reactor_start_state():
 	rod_panel.rod_update()
 	main_panel.info_update()
 
-func rod_move(rod, d):
-	rods[rod].pos = clamp(rods[rod].pos + d, 0, 100)
+func rod_move_and_collide(rod, d):
+	rods[rod].position = clamp(rods[rod].position + d, 0, 100)
 
 func rod_ep():
 	for p in rods:
-		p.pos = 0
+		p.position = 0
 	reactor_panel.labels_update()
 	reactor_control.info_update()
 	rod_panel.rod_update()
 
 func rods_up():
 	for p in rods:
-		p.pos = 100
+		p.position = 100
 	reactor_panel.labels_update()
 	reactor_control.info_update()
 	rod_panel.rod_update()
@@ -241,13 +241,13 @@ var plan_default = [0,0,1,1,1,1,1,0,0,
 
 func _unhandled_key_input(key_event):
 	if (key_event.is_action_pressed("cs_up")):
-		rod_move(rod_panel.current_rod, 1)
+		rod_move_and_collide(rod_panel.current_rod, 1)
 	elif (key_event.is_action_pressed("cs_down")):
-		rod_move(rod_panel.current_rod, -1)
+		rod_move_and_collide(rod_panel.current_rod, -1)
 	elif (key_event.is_action_pressed("ce_up")):
-		rod_move(rod_panel.current_rod, 10)
+		rod_move_and_collide(rod_panel.current_rod, 10)
 	elif (key_event.is_action_pressed("ce_down")):
-		rod_move(rod_panel.current_rod, -10)
+		rod_move_and_collide(rod_panel.current_rod, -10)
 	elif (key_event.scancode == KEY_E):
 		rod_ep()
 	rod_panel.rod_update()
@@ -255,3 +255,4 @@ func _unhandled_key_input(key_event):
 
 func _on_Timer_timeout():
 	reactor_update()
+

@@ -15,3 +15,4 @@ func info_update():
 
 func _on_Frame_pressed():
 	pass
+

@@ -26,3 +26,4 @@ func _on_HelpBtn_pressed():
 
 func _on_ResetBtn_pressed():
 	game.reactor_reset()
+

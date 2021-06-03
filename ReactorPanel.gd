@@ -55,7 +55,7 @@ func reset_ind():
 		for w in range(game.rsize_w):
 			var obj = ind.duplicate()
 			obj.set_size(Vector2(ind_size, ind_size))
-			obj.set_pos(Vector2(w*ind_size, h*ind_size) + offset)
+			obj.set_position(Vector2(w*ind_size, h*ind_size) + offset)
 			panel.add_child(obj)
 			var label = obj.get_node("Label")
 			if (game.plan_default[w + h*game.rsize_h] == 1):
@@ -78,3 +78,4 @@ func _on_PowerDisp_toggled(pressed):
 	power_display = pressed
 	labels_set()
 	labels_update()
+

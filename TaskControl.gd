@@ -19,3 +19,4 @@ func _ready():
 #		else:
 #			seconds = 300
 #			label.set_text("Power %d !E (18000;20000)" % [full_power])
+

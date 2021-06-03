@@ -18,17 +18,17 @@ func _ready():
 
 func update_info():
 	rod_id.set_text("Rod: %d-%d" % [game.rods[rod_panel.current_rod].x, game.rods[rod_panel.current_rod].y])
-	rod_pos.set_text("Rod pos: %d" % game.rods[rod_panel.current_rod].pos)
+	rod_pos.set_text("Rod pos: %d" % game.rods[rod_panel.current_rod].position)
 
 
 func _on_RodUp_pressed():
-	game.rod_move(rod_panel.current_rod, 1 * rod_mul)
+	game.rod_move_and_collide(rod_panel.current_rod, 1 * rod_mul)
 	update_info()
 	rod_panel.rod_update()
 
 
 func _on_RodDown_pressed():
-	game.rod_move(rod_panel.current_rod, -1 * rod_mul)
+	game.rod_move_and_collide(rod_panel.current_rod, -1 * rod_mul)
 	update_info()
 	rod_panel.rod_update()
 
@@ -42,3 +42,4 @@ func _on_Shift_pressed():
 		shift = true
 		rod_mul = 10
 		shift_btn.set_pressed(true)
+

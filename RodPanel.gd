@@ -20,7 +20,7 @@ func _ready():
 
 func rod_update():
 	for i in range(rod_count):
-		rod_btn_label[i].set_text(str(game.rods[i].pos))
+		rod_btn_label[i].set_text(str(game.rods[i].position))
 
 func reset_buttons():
 	rod_btn.clear()
@@ -32,7 +32,7 @@ func reset_buttons():
 		rods[game.rods[i].y].append({x = game.rods[i].x, y = game.rods[i].y, id = i})
 	for i in range(rods.size()-1, -1, -1):
 		if (rods[i].empty()):
-			rods.remove(i)
+			rods.remove_and_collide(i)
 	
 	rod_count = 0
 	for i in rods:
@@ -79,7 +79,7 @@ func reset_buttons():
 		for w in range(rods[h].size()):
 			var obj = btn.duplicate()
 			obj.set_size(Vector2(btn_size, btn_size))
-			obj.set_pos(Vector2(rod_offset[h][w] + count_x, h*btn_size) + offset)
+			obj.set_position(Vector2(rod_offset[h][w] + count_x, h*btn_size) + offset)
 			count_x += rod_offset[h][w]
 			add_child(obj)
 			obj.show()
@@ -97,3 +97,4 @@ func _rod_btn_click(id):
 	current_rod = id
 	rod_btn[current_rod].set_pressed(true)
 	rod_control.update_info()
+
